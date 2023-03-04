@@ -44,7 +44,6 @@ import           Data.Vector.Generic (Vector)
 import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Unboxed as VU
 import           Data.Word
-import Debug.Trace
 
 class PNGLineCompressor c where
   pngCompLine :: forall p v . (Vector v (PxlUnboxable p), PngPixel p) => Proxy (c, p) -> Maybe (v (PxlUnboxable p)) -> (v (PxlUnboxable p)) -> BSL.ByteString
@@ -145,9 +144,9 @@ writePNGByLine p w h extras = Machine.construct $ do
        Z.CompressOutputAvailable out nxt -> yieldChecksumming (BSL.fromStrict out) >> (lift $ lift $ primToPrim nxt) >>= cont
        Z.CompressStreamEnd -> pure ()
        ) =<< fmap fst State.get
-  yieldPut $ B.putWord32be $ traceShowId $ 0xFFFFFFFF `xor` crc
+  yieldPut $ B.putWord32be $ 0xFFFFFFFF `xor` crc
   Machine.yield Seekable.SoughtRet -- Return and write the size
-  yieldPut $ B.putWord32be $ traceShowId (size-4) -- We need to remove the size of the signature.
+  yieldPut $ B.putWord32be $ (size-4) -- We need to remove the size of the signature.
   Machine.yield Seekable.SoughtEnd -- Return so we can write the remaining chunk
   -- Finished iDAT chunk
   yieldChunks $ B.encode $ mkRawChunk iENDSignature mempty

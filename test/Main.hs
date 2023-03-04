@@ -25,7 +25,6 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import           Test.Tasty
 import           Test.Tasty.Hedgehog
-import Debug.Trace
 
 main :: IO ()
 main = defaultMain tests
@@ -39,6 +38,13 @@ tests = testGroup "machines-png"
     ]
   , testGroup "Imgs Eq"
     [ isEq (Gen.word8 Range.constantBounded) (\case {ImageY8 i -> pure i; _ -> Left "Wrong Image Type"})
+    , isEq (PixelYA8 <$> Gen.word8 Range.constantBounded <*> Gen.word8 Range.constantBounded) (\case {ImageYA8 i -> pure i; _ -> Left "Wrong Image Type"})
+    , isEq (PixelRGB8 <$> Gen.word8 Range.constantBounded <*> Gen.word8 Range.constantBounded <*> Gen.word8 Range.constantBounded) (\case {ImageRGB8 i -> pure i; _ -> Left "Wrong Image Type"})
+    , isEq (PixelRGBA8 <$> Gen.word8 Range.constantBounded <*> Gen.word8 Range.constantBounded <*> Gen.word8 Range.constantBounded <*> Gen.word8 Range.constantBounded) (\case {ImageRGBA8 i -> pure i; _ -> Left "Wrong Image Type"})
+    , isEq (Gen.word16 Range.constantBounded) (\case {ImageY16 i -> pure i; _ -> Left "Wrong Image Type"})
+    , isEq (PixelYA16 <$> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded) (\case {ImageYA16 i -> pure i; _ -> Left "Wrong Image Type"})
+    , isEq (PixelRGB16 <$> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded) (\case {ImageRGB16 i -> pure i; _ -> Left "Wrong Image Type"})
+    , isEq (PixelRGBA16 <$> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded) (\case {ImageRGBA16 i -> pure i; _ -> Left "Wrong Image Type"})
     ]
   ]
 
@@ -65,8 +71,6 @@ isEq genPxl unDyn = testProperty "Is Equal" $ property $ do
   h <- forAll $ Gen.element [1..10::Word8]
   imgI <- withImage (intCast w) (intCast h) $ \_ _ -> forAll genPxl
   imgBS <- fmap last . runT $ (construct $ void $ imagePixels (\p -> yield p >> pure p) imgI) ~> writePNG (Proxy @PNGCompFast) (intCast w) (intCast h) [] ~> outputBS
-  let (rawDecode::PngRawImage) = B.decode imgBS
-  traceShowM imgBS
   case fmap unDyn $ decodePng (BSL.toStrict imgBS) of
     Left e -> fail $ "Didn't decode: "<>e
     Right (Left e) -> fail $ "Didn't decode: "<>e
