@@ -29,6 +29,7 @@ import           System.IO
 import           System.IO.Temp
 import           Test.Tasty
 import           Test.Tasty.Hedgehog
+import           Test.Tasty.HUnit
 
 main :: IO ()
 main = defaultMain tests
@@ -50,7 +51,7 @@ tests = testGroup "machines-png"
     , isEq (PixelRGB16 <$> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded) (\case {ImageRGB16 i -> pure i; _ -> Left "Wrong Image Type"})
     , isEq (PixelRGBA16 <$> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded) (\case {ImageRGBA16 i -> pure i; _ -> Left "Wrong Image Type"})
     ]
-  , testProperty "Large" $ property $ do -- Should make random image, only do once.
+  , testCase "Large" $ do -- Should make random image, only do once.
       imgBS <- liftIO $ withSystemTempFile "large.png" $ \fn h -> do
         void $ runT $ (Machine.repeated (PixelRGBA8 0 0 0 0) ~> writePNG (Proxy @PNGCompFast) 2048 2048 [] ~> outputHandle h)
         hClose h
@@ -59,7 +60,7 @@ tests = testGroup "machines-png"
       case decodePng (BSL.toStrict imgBS) of
         Left e -> fail $ "Didn't decode: "<>e
         Right (ImageRGBA8 imgD) ->
-          void $ imageIPixels (\(_x, _y, p) -> if p == (PixelRGBA8 0 0 0 0) then pure p else fail "Pixels didn't match!") imgD
+          void $ imageIPixels (\(_x, _y, p) -> (p @?= (PixelRGBA8 0 0 0 0)) >> pure p) imgD
         Right _ -> fail "Wrong image pixel type"
   ]
 

@@ -17,11 +17,10 @@ module Data.Machine.Png
  , yieldChecksumming
  ) where
 
-import qualified Codec.Compression.Zlib.Internal as Z
 import           Codec.Picture.Png.Internal.Type
 import           Codec.Picture.Types
+import qualified Control.Exception as E
 import           Control.Monad
-import           Control.Monad.Primitive
 import           Control.Monad.State.Strict (StateT, execStateT)
 import qualified Control.Monad.State.Strict as State
 import           Control.Monad.Trans
@@ -33,13 +32,13 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Foldable (foldl')
-import           Data.Function (fix)
 import           Data.IntCast
 import           Data.Kind
 import           Data.Machine ((~>))
 import qualified Data.Machine as Machine
 import qualified Data.Machine.Seekable as Seekable
 import           Data.Proxy
+import qualified Data.Streaming.Zlib as Z
 import           Data.Vector.Generic (Vector)
 import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Unboxed as VU
@@ -70,7 +69,7 @@ type Height = Word32
 -- | Must not contain Critical Chunks (IHDR, PLTE, IDAT, IEND)
 type ExtraPNGChunks = [PngRawChunk]
 
-writePNG :: forall c p m i . (PngPixel p, VU.Unbox (PxlUnboxable p), PrimMonad m, PNGLineCompressor c) => Proxy c -> Width -> Height -> ExtraPNGChunks -> Machine.ProcessT m p (Seekable.Sought i ByteString)
+writePNG :: forall c p m i . (PngPixel p, VU.Unbox (PxlUnboxable p), MonadIO m, PNGLineCompressor c) => Proxy c -> Width -> Height -> ExtraPNGChunks -> Machine.ProcessT m p (Seekable.Sought i ByteString)
 writePNG _ w h ext = (Machine.construct $ getPxLine h) ~> writePNGByLine (Proxy @(c, p)) w h ext
   where
     getPxLine 0 = pure ()
@@ -86,7 +85,6 @@ yieldPut :: B.Put -> Machine.Plan k (Seekable.Sought i ByteString) ()
 yieldPut = yieldChunks . B.runPut
 
 type CRC32 = Word32
-
 
 -- | From the Annex D of the png specification.
 pngCrcTable :: VU.Vector Word32
@@ -105,18 +103,23 @@ yieldChecksumming =
           lutVal = pngCrcTable VU.! (fromIntegral ((crc `xor` u32Val) .&. 0xFF))
        in lutVal `xor` (crc `unsafeShiftR` 8)
 
-yieldCompressing :: forall m k i mb. (Monad m, PrimMonad m, PrimBase mb, PrimState m ~ PrimState mb) => BSL.ByteString -> StateT (Z.CompressStream mb, (Word32, CRC32)) (Machine.PlanT k (Seekable.Sought i  ByteString) m) ()
+popAll :: MonadIO m => Z.Popper -> StateT (a, (Word32, CRC32)) (Machine.PlanT k (Seekable.Sought i  ByteString) m) ()
+popAll pop = go =<< liftIO pop
+  where
+    go (Z.PRNext b) = yieldChecksumming (BSL.fromStrict b) >> liftIO pop >>= go
+    go  Z.PRDone    = pure ()
+    go (Z.PRError e) = liftIO $ E.throw e
+
+yieldCompressing :: forall m k i. (Monad m, MonadIO m) => BSL.ByteString -> StateT (Z.Deflate, (Word32, CRC32)) (Machine.PlanT k (Seekable.Sought i  ByteString) m) ()
 yieldCompressing = mapM_ emit . BSL.toChunks
   where
-    emit :: ByteString -> StateT (Z.CompressStream mb, (Word32, CRC32)) (Machine.PlanT k (Seekable.Sought i ByteString) m) ()
+    emit :: ByteString -> StateT (Z.Deflate, (Word32, CRC32)) (Machine.PlanT k (Seekable.Sought i ByteString) m) ()
     emit b = do
       c <- fst <$> State.get
-      case c of
-        Z.CompressInputRequired spl -> (lift $ lift $ primToPrim $ spl b) >>= State.modify' . first . const
-        Z.CompressOutputAvailable out nxt -> yieldChecksumming (BSL.fromStrict out) >> (lift $ lift $ primToPrim nxt) >>= State.modify' . first . const >> emit b
-        Z.CompressStreamEnd -> fail "Zlib ended before finished!"
+      p <- liftIO $ Z.feedDeflate c b
+      popAll p
 
-writePNGByLine :: forall c p m i . (PngPixel p, VU.Unbox (PxlUnboxable p), PrimMonad m, PNGLineCompressor c) => Proxy (c, p) -> Width -> Height -> ExtraPNGChunks -> Machine.ProcessT m (VU.Vector (PxlUnboxable p)) (Seekable.Sought i ByteString)
+writePNGByLine :: forall c p m i . (PngPixel p, VU.Unbox (PxlUnboxable p), MonadIO m, PNGLineCompressor c) => Proxy (c, p) -> Width -> Height -> ExtraPNGChunks -> Machine.ProcessT m (VU.Vector (PxlUnboxable p)) (Seekable.Sought i ByteString)
 writePNGByLine p w h extras = Machine.construct $ do
   unless (h > 0) $ fail "PNG must contain at least a single pixel"
   yieldChunks pngSignature
@@ -133,17 +136,14 @@ writePNGByLine p w h extras = Machine.construct $ do
   -- Make iDAT chunk
   Machine.yield Seekable.SoughtMark -- We'll want to come back here to write the size of this chunk when we're done.
   yieldPut $ B.putWord32be (0::Word32)
-  (_, (size, crc)) <- (`execStateT` (Z.compressST Z.zlibFormat (Z.defaultCompressParams {Z.compressStrategy = Z.filteredStrategy}), (0, 0xFFFFFFFF))) $ do
+  c <- liftIO $ Z.initDeflate 9 Z.defaultWindowBits 
+  (_, (size, crc)) <- (`execStateT` (c, (0, 0xFFFFFFFF))) $ do
     yieldChecksumming $ iDATSignature
     l <- lift Machine.await
     yieldCompressing $ pngCompLine p Nothing l
     iterateMN_ (\o -> lift Machine.await >>= \n -> yieldCompressing (pngCompLine p (Just o) n) >> pure n) (h-1) l
     -- Time to force the output of the compression stream
-    fix (\cont -> \case
-       Z.CompressInputRequired spl -> (lift $ lift $ primToPrim $ spl mempty) >>= cont
-       Z.CompressOutputAvailable out nxt -> yieldChecksumming (BSL.fromStrict out) >> (lift $ lift $ primToPrim nxt) >>= cont
-       Z.CompressStreamEnd -> pure ()
-       ) =<< fmap fst State.get
+    popAll $ Z.finishDeflate c
   yieldPut $ B.putWord32be $ 0xFFFFFFFF `xor` crc
   Machine.yield Seekable.SoughtRet -- Return and write the size
   yieldPut $ B.putWord32be $ (size-4) -- We need to remove the size of the signature.

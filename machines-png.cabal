@@ -28,10 +28,8 @@ common deps
       , machines ^>= 0.7
       , machines-seekable ^>= 0
       , mtl ^>= 2.3
-      , primitive ^>= 0.8
+      , streaming-commons ^>= 0.2
       , vector ^>= 0.13
-      , zlib ^>= 0.6
-
 
 library
     import:           deps, warnings
@@ -54,4 +52,5 @@ test-suite machines-png-test
       , machines-png
       , tasty >= 1.4
       , tasty-hedgehog ^>= 1.4
+      , tasty-hunit ^>= 0.10
       , temporary ^>= 1.3
