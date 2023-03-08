@@ -75,7 +75,7 @@ writePNG _ w h ext = (Machine.construct $ getPxLine h) ~> writePNGByLine (Proxy 
   where
     getPxLine 0 = pure ()
     getPxLine n = do
-      Machine.yield =<< VG.replicateM (intCast w) (pxlToUnbox <$> Machine.await)
+      Machine.yield =<< VU.replicateM (intCast w) (pxlToUnbox <$> Machine.await)
       getPxLine (n-1)
 {-# INLINABLE writePNG #-}
 

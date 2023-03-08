@@ -22,6 +22,7 @@ common deps
         base ^>=4.17
       , binary ^>= 0.8
       , bytestring ^>= 0.11
+      , deepseq
       , int-cast ^>= 0.2
       , JuicyPixels^>= 3.3.8
       , machines ^>= 0.7
@@ -48,7 +49,9 @@ test-suite machines-png-test
     hs-source-dirs:   test
     main-is:          Main.hs
     build-depends:
-        hedgehog >= 1.2
+        deepseq ^>= 1.4
+      , hedgehog >= 1.2
       , machines-png
       , tasty >= 1.4
       , tasty-hedgehog ^>= 1.4
+      , temporary ^>= 1.3

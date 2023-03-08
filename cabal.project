@@ -3,7 +3,7 @@ packages: .
 source-repository-package
   type: git
   location: https://code.xkrd.net/distributed-systems/machines-seekable
-  tag: f524124a1c8d1d80d7b1f33ba457fcd6f5743f37
+  tag: f762deebaa4526b7cdabd4c8bbffdfa1718b27ca
 
 source-repository-package
   type: git

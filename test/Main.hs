@@ -7,6 +7,7 @@ module Main (main) where
 
 import           Codec.Picture
 import           Codec.Picture.Png.Internal.Type
+import           Control.DeepSeq
 import           Control.Monad
 import           Control.Monad.State.Strict (execStateT)
 import           Control.Monad.Trans
@@ -16,6 +17,7 @@ import qualified Data.ByteString.Lazy as BSL
 import           Data.Bits
 import           Data.IntCast
 import           Data.Machine
+import qualified Data.Machine.Source as Machine
 import           Data.Machine.Png
 import           Data.Machine.Seekable
 import           Data.Proxy
@@ -23,6 +25,8 @@ import           Data.Word
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
+import           System.IO
+import           System.IO.Temp
 import           Test.Tasty
 import           Test.Tasty.Hedgehog
 
@@ -46,6 +50,17 @@ tests = testGroup "machines-png"
     , isEq (PixelRGB16 <$> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded) (\case {ImageRGB16 i -> pure i; _ -> Left "Wrong Image Type"})
     , isEq (PixelRGBA16 <$> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded <*> Gen.word16 Range.constantBounded) (\case {ImageRGBA16 i -> pure i; _ -> Left "Wrong Image Type"})
     ]
+  , testProperty "Large" $ property $ do -- Should make random image, only do once.
+      imgBS <- liftIO $ withSystemTempFile "large.png" $ \fn h -> do
+        void $ runT $ (Machine.repeated (PixelRGBA8 0 0 0 0) ~> writePNG (Proxy @PNGCompFast) 2048 2048 [] ~> outputHandle h)
+        hClose h
+        r <- BSL.readFile fn
+        pure $!! r
+      case decodePng (BSL.toStrict imgBS) of
+        Left e -> fail $ "Didn't decode: "<>e
+        Right (ImageRGBA8 imgD) ->
+          void $ imageIPixels (\(_x, _y, p) -> if p == (PixelRGBA8 0 0 0 0) then pure p else fail "Pixels didn't match!") imgD
+        Right _ -> fail "Wrong image pixel type"
   ]
 
 checkCrc :: TestTree
