@@ -19,7 +19,7 @@ common warnings
 
 common deps
     build-depends:
-        base ^>=4.17
+        base    >=4.17 && < 4.19
       , binary ^>= 0.8
       , bytestring ^>= 0.11
       , deepseq
