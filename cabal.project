@@ -4,10 +4,13 @@ source-repository-package
   type: git
   location: https://code.xkrd.net/distributed-systems/machines-seekable
   tag: 7667cbdaff3ea07d02b9745f46094085603644b5
+  --sha256: 0184a7vdbxmldb52b76l8vm5dlbrq0cpj83l9bss8n2fd26pjafj
+
 
 source-repository-package
   type: git
-  location: https://code.xkrd.net/haskell/Juicy.Pixels.git
-  tag: ba6ea68801a3da9b2f1ab2a1503c2596b2676e75
+  location: https://github.com/cotrone/Juicy.Pixels.git
+  tag: 9971d0237dbda84130531fb5ff63aec1df2b7421
+  --sha256: 0958drcwbimr1k7vk6kjfj17bfxqhlc5fqq8n8rzvgnpqmknqjk3
 
 allow-newer: int-cast:base, hedgehog:primitive

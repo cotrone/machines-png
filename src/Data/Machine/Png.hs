@@ -157,15 +157,18 @@ iterateMN_ _   0 _ = pure ()
 iterateMN_ act n a = act a >>= iterateMN_ act (n-1)
 
 class (VU.Unbox (PxlUnboxable p)) => PngPixel p where
-  type PxlUnboxable p :: Type
+  type PxlUnboxable p :: Type -- ^ Unboxed representation of a pixel
+  type PxlBaseComponent p :: Type -- ^ Base type 
   pngType :: Proxy p -> PngImageType
   pngDepth :: Proxy p -> Word8
   pxEncode :: p -> B.Put
   pxlToUnbox :: p -> PxlUnboxable p
   pxlFromUnbox :: PxlUnboxable p -> p
+  mixWithBaseUnbox :: Proxy p -> (PxlBaseComponent p -> PxlBaseComponent p -> PxlBaseComponent p) -> PxlUnboxable p -> PxlUnboxable p -> PxlUnboxable p
 
 instance PngPixel PixelRGBA8 where
   type PxlUnboxable PixelRGBA8 = (Word8, Word8, Word8, Word8)
+  type PxlBaseComponent PixelRGBA8 = Word8
   pngType  _ = PngTrueColourWithAlpha
   pngDepth _ = 8
   pxEncode (PixelRGBA8 r g b a) = B.putWord8 r >> B.putWord8 g >> B.putWord8 b >> B.putWord8 a
@@ -174,9 +177,12 @@ instance PngPixel PixelRGBA8 where
   {-# INLINE pxlToUnbox #-}
   pxlFromUnbox (r, g, b, a) = (PixelRGBA8 r g b a)
   {-# INLINE pxlFromUnbox #-}
+  mixWithBaseUnbox _ f (r, g, b, a) (r', g', b', a') = (f r r', f g g', f b b', f a a')
+  {-# INLINE mixWithBaseUnbox #-}
 
 instance PngPixel PixelRGB8 where
   type PxlUnboxable PixelRGB8 = (Word8, Word8, Word8)
+  type PxlBaseComponent PixelRGB8 = Word8
   pngType  _ = PngTrueColour
   pngDepth _ = 8
   pxEncode (PixelRGB8 r g b) = B.putWord8 r >> B.putWord8 g >> B.putWord8 b
@@ -185,9 +191,12 @@ instance PngPixel PixelRGB8 where
   {-# INLINE pxlToUnbox #-}
   pxlFromUnbox (r, g, b) = (PixelRGB8 r g b)
   {-# INLINE pxlFromUnbox #-}
+  mixWithBaseUnbox _ f (r, g, b) (r', g', b') = (f r r', f g g', f b b')
+  {-# INLINE mixWithBaseUnbox #-}
 
 instance PngPixel Pixel8 where
   type PxlUnboxable Pixel8 = Word8
+  type PxlBaseComponent Word8 = Word8
   pngType  _ = PngGreyscale
   pngDepth _ = 8
   pxEncode  = B.putWord8
@@ -196,9 +205,12 @@ instance PngPixel Pixel8 where
   {-# INLINE pxlToUnbox #-}
   pxlFromUnbox = id
   {-# INLINE pxlFromUnbox #-}
+  mixWithBaseUnbox _ f = f
+  {-# INLINE mixWithBaseUnbox #-}
 
 instance PngPixel PixelYA8 where
   type PxlUnboxable PixelYA8 = (Word8, Word8)
+  type PxlBaseComponent PixelYA8 = Word8
   pngType  _ = PngGreyscaleWithAlpha
   pngDepth _ = 8
   pxEncode (PixelYA8 l a) = B.putWord8 l >> B.putWord8 a
@@ -207,9 +219,12 @@ instance PngPixel PixelYA8 where
   {-# INLINE pxlToUnbox #-}
   pxlFromUnbox (l, a) = PixelYA8 l a
   {-# INLINE pxlFromUnbox #-}
+  mixWithBaseUnbox _ f (l, a) (l', a') = (f l l', f a a')
+  {-# INLINE mixWithBaseUnbox #-}
 
 instance PngPixel PixelYA16 where
   type PxlUnboxable PixelYA16 = (Word16, Word16)
+  type PxlBaseComponent PixelYA16 = Word16
   pngType  _ = PngGreyscaleWithAlpha
   pngDepth _ = 16
   pxEncode (PixelYA16 l a) = B.putWord16be l >> B.putWord16be a
@@ -218,9 +233,12 @@ instance PngPixel PixelYA16 where
   {-# INLINE pxlToUnbox #-}
   pxlFromUnbox (l, a) = (PixelYA16 l a)
   {-# INLINE pxlFromUnbox #-}
+  mixWithBaseUnbox _ f (l, a) (l', a') = (f l l', f a a')
+  {-# INLINE mixWithBaseUnbox #-}
 
 instance PngPixel Pixel16 where
   type PxlUnboxable Pixel16 = Word16
+  type PxlBaseComponent Pixel16 = Word16
   pngType  _ = PngGreyscale
   pngDepth _ = 16
   pxEncode   = B.putWord16be
@@ -229,9 +247,12 @@ instance PngPixel Pixel16 where
   {-# INLINE pxlToUnbox #-}
   pxlFromUnbox = id
   {-# INLINE pxlFromUnbox #-}
+  mixWithBaseUnbox _ f = f
+  {-# INLINE mixWithBaseUnbox #-}
 
 instance PngPixel PixelRGBA16 where
   type PxlUnboxable PixelRGBA16 = (Word16, Word16, Word16, Word16)
+  type PxlBaseComponent PixelRGBA16 = Word16
   pngType  _ = PngTrueColourWithAlpha
   pngDepth _ = 16
   pxEncode (PixelRGBA16 r g b a) = B.putWord16be r >> B.putWord16be g >> B.putWord16be b >> B.putWord16be a
@@ -240,9 +261,12 @@ instance PngPixel PixelRGBA16 where
   {-# INLINE pxlToUnbox #-}
   pxlFromUnbox (r, g, b, a) = (PixelRGBA16 r g b a)
   {-# INLINE pxlFromUnbox #-}
+  mixWithBaseUnbox _ f (r, g, b, a) (r', g', b', a') = (f r r', f g g', f b b', f a a')
+  {-# INLINE mixWithBaseUnbox #-}
 
 instance PngPixel PixelRGB16 where
   type PxlUnboxable PixelRGB16 = (Word16, Word16, Word16)
+  type PxlBaseComponent PixelRGB16 = Word16
   pngType  _ = PngTrueColour
   pngDepth _ = 16
   pxEncode (PixelRGB16 r g b) = B.putWord16be r >> B.putWord16be g >> B.putWord16be b
@@ -251,3 +275,5 @@ instance PngPixel PixelRGB16 where
   {-# INLINE pxlToUnbox #-}
   pxlFromUnbox (r, g, b) = PixelRGB16 r g b
   {-# INLINE pxlFromUnbox #-}
+  mixWithBaseUnbox _ f (r, g, b) (r', g', b') = (f r r', f g g', f b b')
+  {-# INLINE mixWithBaseUnbox #-}
